@@ -1,0 +1,403 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Gerador de Bloqueio de Domínios</title>
+    <style>
+      body {
+        font-family: Arial, sans-serif;
+        max-width: 800px;
+        margin: 40px auto;
+        background: #f9f9f9;
+        padding: 20px;
+        border-radius: 10px;
+        box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+        box-sizing: border-box;
+      }
+      *,
+      *::before,
+      *::after {
+        box-sizing: inherit;
+      }
+
+      textarea,
+      input {
+        width: 100%;
+        padding: 10px;
+        margin: 10px 0;
+        border: 1px solid #ccc;
+        border-radius: 6px;
+        font-size: 1rem;
+        resize: none;
+      }
+
+      label {
+        font-weight: bold;
+        display: block;
+        margin-top: 10px;
+      }
+
+      .btn-group,
+      .btn-actions {
+        display: flex;
+        justify-content: center;
+        gap: 8px;
+        margin-top: 10px;
+        flex-wrap: wrap;
+      }
+
+      button {
+        padding: 10px 20px;
+        color: white;
+        border: none;
+        border-radius: 6px;
+        cursor: pointer;
+        font-size: 1rem;
+        transition: transform 0.1s ease, opacity 0.2s;
+      }
+      button:hover {
+        opacity: 0.9;
+        transform: scale(1.03);
+      }
+
+      /* Área de resultado com rolagem */
+      #resultado {
+        background: #eee;
+        padding: 15px;
+        border-radius: 8px;
+        white-space: pre-wrap;
+        font-size: 0.95rem;
+        max-height: 350px;
+        overflow-y: auto;
+        border: 1px solid #ccc;
+      }
+
+      #info {
+        margin: 12px 0;
+        font-weight: bold;
+        background: #eef;
+        padding: 10px;
+        border-radius: 6px;
+      }
+
+      .btn-primary {
+        background: #007bff;
+      }
+      .btn-secondary {
+        background: #28a745;
+      }
+      .btn-tertiary {
+        background: #ff8c00;
+      }
+      .btn-warning {
+        background: #ffc107;
+        color: #212529;
+      }
+
+      /* Toast (popup temporário no topo) */
+      #toast {
+        position: fixed;
+        top: 10px;
+        left: 50%;
+        transform: translate(-50%, -20px);
+        background: #333;
+        color: white;
+        padding: 12px 18px;
+        border-radius: 6px;
+        font-size: 0.95rem;
+        opacity: 0;
+        visibility: hidden;
+        transition: opacity 0.3s ease, transform 0.3s ease, visibility 0.3s ease;
+        z-index: 1000;
+        min-width: 280px;
+        text-align: center;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+      }
+      #toast.show {
+        opacity: 1;
+        visibility: visible;
+        transform: translate(-50%, 0);
+      }
+      #toast-bar {
+        height: 4px;
+        background: #b22222;
+        margin-top: 6px;
+        border-radius: 3px;
+        width: 100%;
+        animation: toast-timer 2s linear forwards;
+      }
+      @keyframes toast-timer {
+        from {
+          width: 100%;
+        }
+        to {
+          width: 0%;
+        }
+      }
+
+      @media (max-width: 600px) {
+        button {
+          flex: 1 1 100%;
+        }
+        body {
+          margin: 20px;
+          padding: 15px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <h2>Gerador de Lista de Bloqueio de Domínios</h2>
+
+    <p style="color: red">* obrigatório</p>
+    <p>
+      É necessário analisar os ofícios recebidos e criar uma lista apenas com os
+      sites para bloqueio.
+    </p>
+
+    <label for="dataBloqueio">Data de bloqueio*:</label>
+    <input type="date" id="dataBloqueio" />
+
+    <label for="dataDesbloqueio">Data de desbloqueio:</label>
+    <input type="date" id="dataDesbloqueio" />
+
+    <label for="listaDominios">Lista de domínios*:</label>
+    <textarea
+      id="listaDominios"
+      rows="10"
+      placeholder="Insira um domínio por linha..."
+    ></textarea>
+
+    <div id="info"></div>
+
+    <div class="btn-group">
+      <button class="btn-primary" onclick="gerarLista('ambos')">
+        Gerar Lista A + AAAA
+      </button>
+      <button class="btn-secondary" onclick="gerarLista('ipv4')">
+        Gerar Lista A
+      </button>
+      <button class="btn-tertiary" onclick="gerarLista('ipv6')">
+        Gerar Lista AAAA
+      </button>
+    </div>
+
+    <div class="btn-actions">
+      <button
+        class="btn-primary"
+        id="copiarBtn"
+        onclick="copiarResultado()"
+        style="display: none"
+      >
+        Copiar Resultado
+      </button>
+      <button
+        class="btn-secondary"
+        id="baixarBtn"
+        onclick="baixarArquivo()"
+        style="display: none"
+      >
+        Baixar Arquivo .txt
+      </button>
+    </div>
+
+    <!-- Div de confirmação para domínios irregulares -->
+    <div
+      id="confirmacaoDiv"
+      style="
+        display: none;
+        margin-top: 15px;
+        padding: 15px;
+        border: 1px solid #ffc107;
+        background: #fff3cd;
+        border-radius: 6px;
+      "
+    >
+      <p id="confirmacaoMsg"></p>
+      <div class="btn-actions">
+        <button id="confirmarBtn" class="btn-primary">
+          Os domínios estão corretos
+        </button>
+        <button id="revisarBtn" class="btn-warning">Revisar</button>
+      </div>
+    </div>
+
+    <h3>Resultado:</h3>
+    <pre id="resultado"></pre>
+
+    <!-- Popup temporário -->
+    <div id="toast">
+      <span id="toast-msg"></span>
+      <div id="toast-bar"></div>
+    </div>
+
+    <script>
+      let nomeArquivoExibido = "";
+      let nomeArquivoDownload = "";
+      let conteudoGerado = "";
+
+      function mostrarToast(msg, cor = "#333") {
+        const toast = document.getElementById("toast");
+        const msgEl = document.getElementById("toast-msg");
+        const bar = document.getElementById("toast-bar");
+
+        msgEl.textContent = msg;
+        toast.style.background = cor;
+        bar.style.animation = "none";
+        void bar.offsetWidth; // Reinicia a animação
+        bar.style.animation = "toast-timer 2s linear forwards";
+
+        toast.classList.add("show");
+        setTimeout(() => toast.classList.remove("show"), 2000);
+      }
+
+      function gerarLista(tipo) {
+        const dataBloqueio = document.getElementById("dataBloqueio").value;
+        const dataDesbloqueio =
+          document.getElementById("dataDesbloqueio").value;
+        const listaInput = document
+          .getElementById("listaDominios")
+          .value.trim();
+        const resultadoEl = document.getElementById("resultado");
+        const copiarBtn = document.getElementById("copiarBtn");
+        const baixarBtn = document.getElementById("baixarBtn");
+        const confirmacaoDiv = document.getElementById("confirmacaoDiv");
+        const confirmacaoMsg = document.getElementById("confirmacaoMsg");
+        const confirmarBtn = document.getElementById("confirmarBtn");
+        const revisarBtn = document.getElementById("revisarBtn");
+        const infoEl = document.getElementById("info");
+
+        if (!dataBloqueio) {
+          mostrarToast("Informe a data de bloqueio!", "#FF0000");
+          return;
+        }
+        if (!listaInput) {
+          mostrarToast("Insira pelo menos um domínio!", "#FF0000");
+          return;
+        }
+
+        confirmacaoDiv.style.display = "none";
+        resultadoEl.textContent = "";
+        copiarBtn.style.display = "none";
+        baixarBtn.style.display = "none";
+        infoEl.textContent = "";
+
+        let dominios = listaInput
+          .split(/\r?\n/)
+          .map((d) =>
+            d
+              .trim()
+              .replace(/^https?:\/\//i, "")
+              .replace(/\s+/g, "")
+              .replace(/["']/g, "")
+          )
+          .filter(
+            (d) =>
+              d.length > 0 &&
+              !d.startsWith("#") &&
+              !d.toLowerCase().includes("local-data:") &&
+              !d.includes("######################")
+          );
+
+        dominios = [...new Set(dominios)].sort();
+
+        const regexFimInvalido = /[^a-z]$/i;
+        const dominiosIrregulares = dominios.filter((d) =>
+          regexFimInvalido.test(d)
+        );
+
+        if (dominiosIrregulares.length > 0) {
+          confirmacaoMsg.innerHTML = `Os seguintes domínios terminam de forma irregular:<br><b>${dominiosIrregulares.join(
+            ", "
+          )}</b>`;
+          confirmacaoDiv.style.display = "block";
+
+          confirmarBtn.onclick = () => {
+            confirmacaoDiv.style.display = "none";
+            prosseguirGeracao(tipo, dominios, dataBloqueio, dataDesbloqueio);
+          };
+
+          revisarBtn.onclick = () => {
+            confirmacaoDiv.style.display = "none";
+          };
+          return;
+        }
+
+        prosseguirGeracao(tipo, dominios, dataBloqueio, dataDesbloqueio);
+      }
+
+      function prosseguirGeracao(
+        tipo,
+        dominios,
+        dataBloqueio,
+        dataDesbloqueio
+      ) {
+        const resultadoEl = document.getElementById("resultado");
+        const infoEl = document.getElementById("info");
+
+        let saida = "###################### INICIO ######################\n\n";
+        dominios.forEach((dom) => {
+          if (tipo === "ipv4")
+            saida += `local-data: "${dom}. 3600 IN A 127.0.0.1"\n\n`;
+          else if (tipo === "ipv6")
+            saida += `local-data: "${dom}. 3600 IN AAAA ::1"\n\n`;
+          else {
+            saida += `local-data: "${dom}. 3600 IN A 127.0.0.1"\n`;
+            saida += `local-data: "${dom}. 3600 IN AAAA ::1"\n\n`;
+          }
+        });
+        saida += "###################### FIM ######################";
+
+        const formatDate = (d) => (d ? d.split("-").reverse().join("-") : "");
+        nomeArquivoExibido = dataDesbloqueio
+          ? `bloqueio-dominios-${formatDate(
+              dataBloqueio
+            )}-desbloqueio-${formatDate(dataDesbloqueio)}.conf`
+          : `bloqueio-dominios-${formatDate(dataBloqueio)}.conf`;
+
+        nomeArquivoDownload = nomeArquivoExibido.replace(".conf", ".txt");
+        conteudoGerado = saida;
+
+        infoEl.innerHTML = `
+	  <p>
+	  Total de domínios: ${dominios.length}
+	  </p>
+	  <p>
+	  Nome do arquivo: ${nomeArquivoExibido}
+	  </p>
+	  `;
+        resultadoEl.textContent = saida;
+        document.getElementById("copiarBtn").style.display = "inline-block";
+        document.getElementById("baixarBtn").style.display = "inline-block";
+        mostrarToast("Lista gerada com sucesso!", "#28a745");
+      }
+
+      function copiarResultado() {
+        if (!conteudoGerado) {
+          mostrarToast("Nenhum resultado para copiar!", "#FF0000");
+          return;
+        }
+        navigator.clipboard.writeText(conteudoGerado);
+        mostrarToast("Resultado copiado!", "#007bff");
+      }
+
+      function baixarArquivo() {
+        if (!conteudoGerado) {
+          mostrarToast("Nenhum resultado para baixar!", "#FF0000");
+          return;
+        }
+        const blob = new Blob([conteudoGerado], { type: "text/plain" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = nomeArquivoDownload;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        mostrarToast("Arquivo baixado com sucesso!", "#28a745");
+      }
+    </script>
+  </body>
+</html>
