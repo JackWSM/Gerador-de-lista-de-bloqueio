@@ -342,7 +342,7 @@
         let dominios;
         let duplicatasRemovidas = 0;
 
-        // Verifica se a lista já possui alguma configuração de bloqueio
+        // Verificar se a lista já possui alguma configuração de bloqueio
         if (listaInput.includes("local-data:")) {
           const regex = /local-data: "(.*?)\. 3600 IN (A|AAAA).*/;
           const linhas = listaInput.split(/\r?\n/);
