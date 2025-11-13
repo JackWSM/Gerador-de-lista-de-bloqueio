@@ -90,6 +90,9 @@
       .btn-tertiary {
         background: #ff8c00;
       }
+      .btn-quaternary {
+        background: #4e5257;
+      }
       .btn-warning {
         background: #ffc107;
         color: #212529;
@@ -127,6 +130,24 @@
         width: 100%;
         animation: toast-timer 2s linear forwards;
       }
+      #lista-irregulares {
+        max-height: 180px;
+        overflow-y: auto;
+        background: #f8f8f8;
+        border: 1px solid #ccc;
+        padding: 8px;
+        margin-top: 6px;
+        border-radius: 6px;
+        font-family: monospace;
+        line-height: 1.5;
+        font-size: 13px;
+      }
+      #descricao {
+        padding: 8px;
+        margin-top: 6px;
+        line-height: 1.5;
+      }
+
       @keyframes toast-timer {
         from {
           width: 100%;
@@ -145,24 +166,37 @@
           padding: 15px;
         }
       }
+      #watermark {
+        position: fixed;
+        bottom: 10px;
+        right: 10px;
+        font-size: 0.8em;
+        color: rgba(0, 0, 0, 0.2);
+        pointer-events: none;
+        z-index: 1000;
+      }
     </style>
   </head>
   <body>
     <h2>Gerador de Lista de Bloqueio de Domínios</h2>
-
-    <p style="color: red">* obrigatório</p>
-    <p>
-      É necessário analisar os ofícios recebidos e criar uma lista apenas com os
-      sites para bloqueio.
+    <p id="descricao">
+      Analise os ofícios recebidos e crie uma lista contendo apenas os domínios
+      a serem bloqueados.<br />
+      Informe a data de bloqueio e, se houver, também a data de desbloqueio para
+      gerar automaticamente o nome do arquivo.<br />
+      Em seguida, cole abaixo a relação de domínios, com um domínio por
+      linha.<br />
+      A lista será ordenada e todos os itens duplicados, espaços em branco,
+      aspas e prefixos http(s) serão removidos.
     </p>
 
-    <label for="dataBloqueio">Data de bloqueio*:</label>
+    <label for="dataBloqueio">Data de bloqueio:</label>
     <input type="date" id="dataBloqueio" />
 
-    <label for="dataDesbloqueio">Data de desbloqueio:</label>
+    <label for="dataDesbloqueio">Data de desbloqueio (opcional):</label>
     <input type="date" id="dataDesbloqueio" />
 
-    <label for="listaDominios">Lista de domínios*:</label>
+    <label for="listaDominios">Lista de domínios:</label>
     <textarea
       id="listaDominios"
       rows="10"
@@ -172,14 +206,36 @@
     <div id="info"></div>
 
     <div class="btn-group">
-      <button class="btn-primary" onclick="gerarLista('ambos')">
-        Gerar Lista A + AAAA
+      <button
+        class="btn-quaternary"
+        onclick="gerarLista('apenasDominios')"
+        title="Gera apenas a lista simples de domínios sen apontamento de bloqueio."
+      >
+        Gerar Lista de Domínios
       </button>
-      <button class="btn-secondary" onclick="gerarLista('ipv4')">
-        Gerar Lista A
+
+      <button
+        class="btn-primary"
+        onclick="gerarLista('ambos')"
+        title="Gera os apontamentos para IPv4 (A) e IPv6 (AAAA)."
+      >
+        Gerar Lista IPv4 + IPv6
       </button>
-      <button class="btn-tertiary" onclick="gerarLista('ipv6')">
-        Gerar Lista AAAA
+
+      <button
+        class="btn-secondary"
+        onclick="gerarLista('ipv4')"
+        title="Gera os apontamentos apenas para IPv4 (A)."
+      >
+        Gerar Lista IPv4
+      </button>
+
+      <button
+        class="btn-tertiary"
+        onclick="gerarLista('ipv6')"
+        title="Gera os apontamentos apenas para IPv6 (AAAA)."
+      >
+        Gerar Lista IPv6
       </button>
     </div>
 
@@ -268,7 +324,7 @@
         const revisarBtn = document.getElementById("revisarBtn");
         const infoEl = document.getElementById("info");
 
-        if (!dataBloqueio) {
+        if (!dataBloqueio && tipo !== "apenasDominios") {
           mostrarToast("Informe a data de bloqueio!", "#FF0000");
           return;
         }
@@ -283,71 +339,117 @@
         baixarBtn.style.display = "none";
         infoEl.textContent = "";
 
-        let dominios = listaInput
-          .split(/\r?\n/)
-          .map((d) =>
-            d
-              .trim()
-              .replace(/^https?:\/\//i, "")
-              .replace(/\s+/g, "")
-              .replace(/["']/g, "")
-          )
-          .filter(
-            (d) =>
-              d.length > 0 &&
-              !d.startsWith("#") &&
-              !d.toLowerCase().includes("local-data:") &&
-              !d.includes("######################")
-          );
+        let dominios;
+        let duplicatasRemovidas = 0;
 
-        dominios = [...new Set(dominios)].sort();
+        // Verifica se a lista já possui alguma configuração de bloqueio
+        if (listaInput.includes("local-data:")) {
+          const regex = /local-data: "(.*?)\. 3600 IN (A|AAAA).*/;
+          const linhas = listaInput.split(/\r?\n/);
+          let dominiosExtraidos = [];
 
-        const regexFimInvalido = /[^a-z]$/i;
+          linhas.forEach((linha) => {
+            const match = linha.trim().match(regex);
+            // match[1] é o grupo capturado (o domínio)
+            if (match && match[1]) {
+              dominiosExtraidos.push(match[1]);
+            }
+          });
+
+          const originalCount = dominiosExtraidos.length;
+          dominios = [...new Set(dominiosExtraidos)].sort();
+          duplicatasRemovidas = originalCount - dominios.length;
+        } else {
+          // Caso seja uma lista simples de domínios
+          dominios = listaInput
+            .split(/\r?\n/)
+            .map((d) =>
+              d
+                .trim()
+                .replace(/^https?:\/\//i, "")
+                .replace(/\s+/g, "")
+                .replace(/["']/g, "")
+            )
+            .filter(
+              (d) =>
+                d.length > 0 &&
+                !d.startsWith("#") &&
+                !d.toLowerCase().includes("local-data:") &&
+                !d.includes("######################")
+            );
+          const originalCount = dominios.length;
+          dominios = [...new Set(dominios)].sort();
+          duplicatasRemovidas = originalCount - dominios.length;
+        }
+
+        const regexDominioInvalido = /^[^a-z0-9]|[^a-z]$/i;
         const dominiosIrregulares = dominios.filter((d) =>
-          regexFimInvalido.test(d)
+          regexDominioInvalido.test(d)
         );
 
         if (dominiosIrregulares.length > 0) {
-          confirmacaoMsg.innerHTML = `Os seguintes domínios terminam de forma irregular:<br><b>${dominiosIrregulares.join(
-            ", "
-          )}</b>`;
+          // Gera a lista de domínios, um por linha
+          const listaHTML = dominiosIrregulares
+            .map((d) => `<div>${d}</div>`)
+            .join("");
+
+          // Define o conteúdo com rolagem se for longo
+          confirmacaoMsg.innerHTML = `
+          Os seguintes domínios iniciam ou terminam de forma irregular:<br>
+          <div id="lista-irregulares">${listaHTML}</div>
+          `;
           confirmacaoDiv.style.display = "block";
 
           confirmarBtn.onclick = () => {
             confirmacaoDiv.style.display = "none";
-            prosseguirGeracao(tipo, dominios, dataBloqueio, dataDesbloqueio);
+            prosseguirGeracao(
+              tipo,
+              dominios,
+              dataBloqueio,
+              dataDesbloqueio,
+              duplicatasRemovidas
+            );
           };
 
           revisarBtn.onclick = () => {
             confirmacaoDiv.style.display = "none";
           };
+
           return;
         }
 
-        prosseguirGeracao(tipo, dominios, dataBloqueio, dataDesbloqueio);
+        prosseguirGeracao(
+          tipo,
+          dominios,
+          dataBloqueio,
+          dataDesbloqueio,
+          duplicatasRemovidas,
+          duplicatasRemovidas
+        );
       }
 
       function prosseguirGeracao(
         tipo,
         dominios,
         dataBloqueio,
-        dataDesbloqueio
+        dataDesbloqueio,
+        duplicatasRemovidas
       ) {
         const resultadoEl = document.getElementById("resultado");
         const infoEl = document.getElementById("info");
 
-        let saida = "###################### INICIO ######################\n\n";
+        let saida = "";
         dominios.forEach((dom) => {
           if (tipo === "ipv4")
             saida += `local-data: "${dom}. 3600 IN A 127.0.0.1"\n\n`;
           else if (tipo === "ipv6")
             saida += `local-data: "${dom}. 3600 IN AAAA ::1"\n\n`;
+          else if (tipo === "apenasDominios") saida += `${dom}\n\n`;
           else {
             saida += `local-data: "${dom}. 3600 IN A 127.0.0.1"\n`;
             saida += `local-data: "${dom}. 3600 IN AAAA ::1"\n\n`;
           }
         });
-        saida += "###################### FIM ######################";
 
         const formatDate = (d) => (d ? d.split("-").reverse().join("-") : "");
         nomeArquivoExibido = dataDesbloqueio
@@ -359,18 +461,16 @@
         nomeArquivoDownload = nomeArquivoExibido.replace(".conf", ".txt");
         conteudoGerado = saida;
 
-        infoEl.innerHTML = `
-	  <p>
-	  Total de domínios: ${dominios.length}
-	  </p>
-	  <p>
-	  Nome do arquivo: ${nomeArquivoExibido}
-	  </p>
-	  `;
+        let infoHTML = `<p>Total de domínios: ${dominios.length}</p>`;
+        infoHTML += `<p>Linhas duplicadas removidas: ${duplicatasRemovidas}</p>`;
+
+        if (tipo !== "apenasDominios") {
+          infoHTML += `<p>Nome do arquivo: ${nomeArquivoExibido}</p>`;
+        }
+        infoEl.innerHTML = infoHTML;
         resultadoEl.textContent = saida;
         document.getElementById("copiarBtn").style.display = "inline-block";
         document.getElementById("baixarBtn").style.display = "inline-block";
-        mostrarToast("Lista gerada com sucesso!", "#28a745");
       }
 
       function copiarResultado() {
@@ -399,5 +499,6 @@
         mostrarToast("Arquivo baixado com sucesso!", "#28a745");
       }
     </script>
+    <div id="watermark">by Jack</div>
   </body>
 </html>
